@@ -11,6 +11,7 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/go-jose/go-jose/v4 v4.1.2
 	github.com/goccy/go-yaml v1.18.0
+	github.com/gofrs/flock v0.12.1
 	github.com/google/go-github/v74 v74.0.0
 	github.com/google/renameio/v2 v2.0.0
 	github.com/gosimple/slug v1.15.0

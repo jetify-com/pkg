@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/gofrs/flock"
 	"github.com/pkg/errors"
 	"go.jetify.com/pkg/cachehash"
 )
@@ -57,6 +58,13 @@ func (c *Cache[T]) Set(key string, val T, dur time.Duration) error {
 		return errors.WithStack(err)
 	}
 
+	// Acquire exclusive lock to prevent concurrent writes from corrupting the file
+	lock := flock.New(c.lockfile())
+	if err := lock.Lock(); err != nil {
+		return errors.WithStack(err)
+	}
+	defer lock.Unlock()
+
 	return errors.WithStack(os.WriteFile(c.filename(key), d, 0o644))
 }
 
@@ -68,6 +76,13 @@ func (c *Cache[T]) SetWithTime(key string, val T, t time.Time) error {
 		return errors.WithStack(err)
 	}
 
+	// Acquire exclusive lock to prevent concurrent writes from corrupting the file
+	lock := flock.New(c.lockfile())
+	if err := lock.Lock(); err != nil {
+		return errors.WithStack(err)
+	}
+	defer lock.Unlock()
+
 	return errors.WithStack(os.WriteFile(c.filename(key), d, 0o644))
 }
 
@@ -75,6 +90,13 @@ func (c *Cache[T]) SetWithTime(key string, val T, t time.Time) error {
 func (c *Cache[T]) Get(key string) (T, error) {
 	path := c.filename(key)
 	resultData := data[T]{}
+
+	// Acquire shared lock before checking file existence to prevent TOCTOU race
+	lock := flock.New(c.lockfile())
+	if err := lock.RLock(); err != nil {
+		return resultData.Val, errors.WithStack(err)
+	}
+	defer lock.Unlock()
 
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		return resultData.Val, NotFound
@@ -146,4 +168,10 @@ func (c *Cache[T]) filename(key string) string {
 	dir := filepath.Join(c.cacheDir, c.domain)
 	_ = os.MkdirAll(dir, 0o755)
 	return filepath.Join(dir, cachehash.Slug(key))
+}
+
+func (c *Cache[T]) lockfile() string {
+	dir := filepath.Join(c.cacheDir, c.domain)
+	_ = os.MkdirAll(dir, 0o755)
+	return filepath.Join(dir, ".lock")
 }
